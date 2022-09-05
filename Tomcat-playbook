@@ -1,6 +1,6 @@
 ---
-- name: Install Java 1.7
-  yum: name=java-1.7.0-openjdk state=present
+- name: Install Java 1.8
+  yum: name=java-1.8.0-openjdk state=present
 
 - name: add group "tomcat"
   group: name=tomcat
@@ -51,3 +51,107 @@
 
 - name: wait for tomcat to start
   wait_for: port={{http_port}}
+  
+  
+  vim tomcat-users.xml
+  
+  <role rolename="manager-gui"/>
+ <role rolename="manager-script"/>
+ <role rolename="manager-jmx"/>
+ <role rolename="manager-status"/>
+ <user username="admin" password="admin" roles="manager-gui, manager-script, manager-jmx, manager-status"/>
+ <user username="deployer" password="deployer" roles="manager-script"/>
+ <user username="tomcat" password="s3cret" roles="manager-gui"/>
+ 
+ vim tomcat-initscript.sh
+ 
+ #!/bin/bash
+#
+# tomcatd       Start Tomcat server
+#
+# chkconfig: - 80 20
+# description: Tomcat Web Application Server
+#
+# processname: tomcat
+# pidfile: /var/run/tomcat.pid
+
+### BEGIN INIT INFO
+# Provides: tomcat
+# Required-Start: $network $syslog
+# Required-Stop: $network $syslog
+# Default-Start:
+# Default-Stop:
+# Short-Description: Start tomcat server
+### END INIT INFO
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+prog=tomcat
+RETVAL=$?
+lockfile=/var/lock/subsys/$prog
+
+# Tomcat init Variables
+# for additional tomcat config please use setenv
+
+#CATALINA_HOME is the location of the bin files of Tomcat
+export CATALINA_HOME="/opt/tomcat"
+#CATALINA_PID is the location of the PID file
+export CATALINA_PID="/var/run/$prog.pid"
+#TOMCAT_USER is the default user of tomcat
+TOMCAT_USER=tomcat
+#SHUTDOWN_VERBOSE Whether to annoy the user with "attempting to shut down" messages or not
+SHUTDOWN_VERBOSE="false"
+#SHUTDOWN_WAIT Time to wait in seconds, before killing process
+SHUTDOWN_WAIT="20"
+
+# Start of the script
+start() {
+    echo -n $"Starting $prog: "
+    touch $CATALINA_PID
+    chown $TOMCAT_USER $CATALINA_PID
+    daemon --user $TOMCAT_USER "$CATALINA_HOME/bin/catalina.sh" start
+    RETVAL=$?
+    echo
+    [ $RETVAL -eq 0 ] && touch $lockfile
+    return $RETVAL
+}
+
+stop() {
+    echo -n $"Shutting down $prog: "
+    daemon --user $TOMCAT_USER "$CATALINA_HOME/bin/catalina.sh" stop
+    RETVAL=$?
+    echo
+    [ $RETVAL -eq 0 ] && rm -f $lockfile
+    return $RETVAL
+}
+
+rhstatus(){
+    status -p "$CATALINA_PID" $prog
+}
+
+case $1 in
+    start)
+        start
+    ;;
+    stop)
+        stop
+    ;;
+    restart)
+        stop
+        start
+    ;;
+    status)
+        rhstatus
+    ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+    ;;
+esac
+exit 0
+
+ansible-playbook tomcat.yml --syntax-check
+
+ansible-playbook tomcat.yml
+
+
