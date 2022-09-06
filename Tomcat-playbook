@@ -1,157 +1,46 @@
 ---
-- name: Install Java 1.8
-  yum: name=java-1.8.0-openjdk state=present
+- hosts: localhost
+  tasks:
+    - name: make sure that we can cannect to the machine
+      ping:
+    - name: Install Java 1.8
+      yum: name=java-1.8.0-openjdk state=present
 
-- name: add group "tomcat"
-  group: name=tomcat
+    - name: add group "tomcat"
+      group: name=tomcat
 
-- name: add user "tomcat"
-  user: name=tomcat group=tomcat home=/usr/share/tomcat createhome=no
-  become: True
-  become_method: sudo
+    - name: add user "tomcat"
+      user: name=tomcat group=tomcat  createhome=yes
+      become: True
 
-- name: Download Tomcat
-  get_url: url=http://archive.apache.org/dist/tomcat/tomcat-7/v7.0.61/bin/apache-tomcat-7.0.61.tar.gz dest=/opt/apache-tomcat-7.0.61.tar.gz
+    - name: Download Tomcat
+      get_url: url=http://archive.apache.org/dist/tomcat/tomcat-7/v7.0.61/bin/apache-tomcat-7.0.61.tar.gz dest=/opt/apache-tomcat-7.0.61.tar.gz
 
-- name: Extract archive
-  command: chdir=/usr/share /bin/tar xvf /opt/apache-tomcat-7.0.61.tar.gz -C /opt/ creates=/opt/apache-tomcat-7.0.61
+    - name: Extract archive
+      unarchive: src=/opt/apache-tomcat-7.0.61.tar.gz dest=/opt/
 
-- name: Symlink install directory
-  file: src=/opt/apache-tomcat-7.0.61 path=/usr/share/tomcat state=link
+    - name: Change ownership of Tomcat installation
+      file: path=/opt/apache-tomcat-7.0.61/ owner=tomcat group=tomcat state=directory recurse=yes
+    
+    - name: Configure Tomcat users
+      template: src=tomcat-users.xml dest=/opt/apache-tocat-7.0.61/conf
+      notify: restart tomcat
 
-- name: Change ownership of Tomcat installation
-  file: path=/usr/share/tomcat/ owner=tomcat group=tomcat state=directory recurse=yes
+    - name: Install Tomcat init script
+      copy: src=tomcat-initscript.sh dest=/etc/init.d/tomcat mode=0755
 
-- name: Configure Tomcat server
-  template: src=server.xml dest=/usr/share/tomcat/conf/
-  notify: restart tomcat
+    - name: Start Tomcat
+      service: name=tomcat state=started enabled=yes
 
-- name: Configure Tomcat users
-  template: src=tomcat-users.xml dest=/usr/share/tomcat/conf/
-  notify: restart tomcat
 
-- name: Install Tomcat init script
-  copy: src=tomcat-initscript.sh dest=/etc/init.d/tomcat mode=0755
 
-- name: Start Tomcat
-  service: name=tomcat state=started enabled=yes
 
-- name: deploy iptables rules
-  template: src=iptables-save dest=/etc/sysconfig/iptables
-  when: "ansible_os_family == 'RedHat' and ansible_distribution_major_version == '6'"
-  notify: restart iptables
-
-- name: insert firewalld rule for tomcat http port
-  firewalld: port={{ http_port }}/tcp permanent=true state=enabled immediate=yes
-  when: "ansible_os_family == 'RedHat' and ansible_distribution_major_version == '7'"
-
-- name: insert firewalld rule for tomcat https port
-  firewalld: port={{ https_port }}/tcp permanent=true state=enabled immediate=yes
-  when: "ansible_os_family == 'RedHat' and ansible_distribution_major_version == '7'"
-
-- name: wait for tomcat to start
-  wait_for: port={{http_port}}
+vim tomcat-users.xml    (paste tomcat-users.xml script)
   
-  
-  vim tomcat-users.xml
-  
-  <role rolename="manager-gui"/>
- <role rolename="manager-script"/>
- <role rolename="manager-jmx"/>
- <role rolename="manager-status"/>
- <user username="admin" password="admin" roles="manager-gui, manager-script, manager-jmx, manager-status"/>
- <user username="deployer" password="deployer" roles="manager-script"/>
- <user username="tomcat" password="s3cret" roles="manager-gui"/>
- 
- vim tomcat-initscript.sh
- 
- #!/bin/bash
-#
-# tomcatd       Start Tomcat server
-#
-# chkconfig: - 80 20
-# description: Tomcat Web Application Server
-#
-# processname: tomcat
-# pidfile: /var/run/tomcat.pid
+vim tomcat-initscript.sh   (paste tomcat-initscript.sh)
 
-### BEGIN INIT INFO
-# Provides: tomcat
-# Required-Start: $network $syslog
-# Required-Stop: $network $syslog
-# Default-Start:
-# Default-Stop:
-# Short-Description: Start tomcat server
-### END INIT INFO
+ansible-playbook tomcat.yml --syntax-check  (check tomcat.yml status)
 
-# Source function library.
-. /etc/rc.d/init.d/functions
-
-prog=tomcat
-RETVAL=$?
-lockfile=/var/lock/subsys/$prog
-
-# Tomcat init Variables
-# for additional tomcat config please use setenv
-
-#CATALINA_HOME is the location of the bin files of Tomcat
-export CATALINA_HOME="/opt/tomcat"
-#CATALINA_PID is the location of the PID file
-export CATALINA_PID="/var/run/$prog.pid"
-#TOMCAT_USER is the default user of tomcat
-TOMCAT_USER=tomcat
-#SHUTDOWN_VERBOSE Whether to annoy the user with "attempting to shut down" messages or not
-SHUTDOWN_VERBOSE="false"
-#SHUTDOWN_WAIT Time to wait in seconds, before killing process
-SHUTDOWN_WAIT="20"
-
-# Start of the script
-start() {
-    echo -n $"Starting $prog: "
-    touch $CATALINA_PID
-    chown $TOMCAT_USER $CATALINA_PID
-    daemon --user $TOMCAT_USER "$CATALINA_HOME/bin/catalina.sh" start
-    RETVAL=$?
-    echo
-    [ $RETVAL -eq 0 ] && touch $lockfile
-    return $RETVAL
-}
-
-stop() {
-    echo -n $"Shutting down $prog: "
-    daemon --user $TOMCAT_USER "$CATALINA_HOME/bin/catalina.sh" stop
-    RETVAL=$?
-    echo
-    [ $RETVAL -eq 0 ] && rm -f $lockfile
-    return $RETVAL
-}
-
-rhstatus(){
-    status -p "$CATALINA_PID" $prog
-}
-
-case $1 in
-    start)
-        start
-    ;;
-    stop)
-        stop
-    ;;
-    restart)
-        stop
-        start
-    ;;
-    status)
-        rhstatus
-    ;;
-    *)
-        echo "Usage: $0 {start|stop|restart|status}"
-    ;;
-esac
-exit 0
-
-ansible-playbook tomcat.yml --syntax-check
-
-ansible-playbook tomcat.yml
+ansible-playbook tomcat.yml      (run playbook)
 
 
