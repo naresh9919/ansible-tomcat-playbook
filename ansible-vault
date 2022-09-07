@@ -1,0 +1,84 @@
+
+what is ansible vault ?
+Ansible Vault is an Ansible feature that helps you encrypt confidential information without compromising security.
+
+Ansible Vault performs various operations. Specifically, it can
+
+1.Encrypt a file
+2.Decrypt a file
+3.View an encrypted file without breaking the encryption
+4.Edit an encrypted file
+5.Create an encrypted file
+6.Generate or reset the encrypted key
+
+1.Create an encrypted file
+
+file name :- vinay
+
+# ansible-vault create vinay
+
+new vault password: vinay
+conform new vault password: vinay
+
+prompt will open---- give some data
+
+save the file and check list
+
+# cat vinay
+
+data will not open because it is encryped
+
+
+2.Decrypting a file
+# ansible-vault decrypt vinay
+vault password:
+decryption successful
+
+# cat vinay
+now data can see
+
+3.View an encrypted file without breaking the encryption
+
+# ansible-vault view vinay
+vault password:
+we can see the data
+
+4.Editing the encrypted file
+
+# ansible-vault edit vinay
+vault password:
+we can edit the data
+
+5.Reset the file password
+
+# ansible-vault rekey vinay.yml
+
+vault password: vinay
+new vault password: siddu
+conform new vault password: siddu
+rekey successful
+
+6.Decrypt a running playbook
+
+# ansible-playbook --ask-vault-pass vinay.yml
+
+vault password:
+now we can run a playbook
+
+
+if you do not want to enter passwords every time, for that 
+we need to create a a file
+
+file name:- pass
+# vim pass
+ 
+store passwords here and save
+
+now run the playbook
+
+# ansible-playbook vinay.yml --vault-password-file pass
+
+
+if pass file is in /opt/ at the time
+
+# ansible-playbook vinay.yml --vault-password-file /opt/pass
